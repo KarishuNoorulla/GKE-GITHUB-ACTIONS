@@ -81,6 +81,9 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
       - name: Terraform Init
         run: terraform init -input=false
 
@@ -88,10 +91,10 @@ jobs:
         run: terraform validate
 
       - name: Terraform Plan
-        run: terraform plan -out=tfplan -input=false
+        run: terraform plan -out=tfplan -input=false -var="project_id=${{ secrets.GCP_PROJECT }}"
 
       - name: Terraform Apply
-        run: terraform apply -input=false -auto-approve tfplan
+        run: terraform apply -input=false -auto-approve -var="project_id=${{ secrets.GCP_PROJECT }}" tfplan
 
   deploy:
     needs: terraform
@@ -123,9 +126,11 @@ jobs:
         run: |
           kubectl apply -f app/deployment.yaml
           kubectl apply -f app/service.yaml
-          kubectl rollout status deployment/hello-deployment --timeout=90s
+          kubectl rollout status deployment/hello-deployment --timeout=120s
 
       - name: Get Service URL
+        id: service_url
         run: |
-          echo "Service IP: $(kubectl get service hello-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
-          echo "Access the application at: http://$(kubectl get service hello-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+          IP=$(kubectl get service hello-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Service IP: $IP"
+          echo "service_url=http://$IP" >> $GITHUB_OUTPUT
