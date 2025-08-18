@@ -1,4 +1,12 @@
-  terraform:
+name: CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:                           # <- This is required
+  terraform:                    # <- Your job name goes here
     needs: setup_runner
     runs-on: self-hosted
     environment: production
