@@ -35,7 +35,7 @@ resource "google_container_cluster" "primary" {
   name                     = var.cluster_name
   location                 = var.region
   remove_default_node_pool  = true
-  initial_node_count        = 1
+  initial_node_count        = 0      # Avoid default node pool / SSD quota issues
   network                  = google_compute_network.vpc.name
   subnetwork               = google_compute_subnetwork.subnet.name
 
@@ -67,8 +67,8 @@ resource "google_container_node_pool" "primary_nodes" {
   node_config {
     preemptible  = true
     machine_type = var.machine_type
-    disk_type    = "pd-standard"  # Use standard disk to reduce quota usage
-    disk_size_gb = 20             # Smaller disk to fit quota
+    disk_type    = "pd-standard"
+    disk_size_gb = 20
     oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform"
     ]

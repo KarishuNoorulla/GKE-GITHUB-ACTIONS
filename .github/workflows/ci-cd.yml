@@ -123,11 +123,9 @@ jobs:
         run: |
           kubectl apply -f app/deployment.yaml
           kubectl apply -f app/service.yaml
-          kubectl rollout status deployment/hello-deployment --timeout=120s
+          kubectl rollout status deployment/hello-deployment --timeout=90s
 
       - name: Get Service URL
-        id: service_url
         run: |
-          IP=$(kubectl get service hello-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-          echo "Service IP: $IP"
-          echo "service_url=http://$IP" >> $GITHUB_OUTPUT
+          echo "Service IP: $(kubectl get service hello-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+          echo "Access the application at: http://$(kubectl get service hello-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
