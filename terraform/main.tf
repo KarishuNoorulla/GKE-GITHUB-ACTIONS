@@ -35,8 +35,7 @@ resource "google_container_cluster" "primary" {
   name     = var.cluster_name
   location = var.region
 
-  # Must be >=1 even if removing default node pool
-  initial_node_count       = 0
+  initial_node_count       = 1
   remove_default_node_pool = true
 
   network    = google_compute_network.vpc.name
@@ -70,11 +69,9 @@ resource "google_container_node_pool" "primary_nodes" {
   node_config {
     preemptible  = true
     machine_type = var.machine_type
-    disk_type    = "pd-standard"  # smaller disks
-    disk_size_gb = 20
-    oauth_scopes = [
-      "https://www.googleapis.com/auth/cloud-platform"
-    ]
+    disk_type    = "pd-standard" # standard disk avoids SSD quota
+    disk_size_gb = 20            # small size
+    oauth_scopes = ["https://www.googleapis.com/auth/cloud-platform"]
   }
 
   management {
