@@ -35,7 +35,7 @@ resource "google_container_cluster" "primary" {
   name                     = var.cluster_name
   location                 = var.region
   remove_default_node_pool  = true
-  initial_node_count        = 0      # Avoid default node pool / SSD quota issues
+  initial_node_count        = 1      # Avoid default node pool / SSD quota issues
   network                  = google_compute_network.vpc.name
   subnetwork               = google_compute_subnetwork.subnet.name
 
