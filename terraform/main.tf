@@ -31,13 +31,16 @@ resource "google_compute_subnetwork" "subnet" {
 }
 
 resource "google_container_cluster" "primary" {
-  provider                 = google-beta
-  name                     = var.cluster_name
-  location                 = var.region
-  remove_default_node_pool  = true
-  initial_node_count        = 1      # Avoid default node pool / SSD quota issues
-  network                  = google_compute_network.vpc.name
-  subnetwork               = google_compute_subnetwork.subnet.name
+  provider = google-beta
+  name     = var.cluster_name
+  location = var.region
+
+  # Must be >=1 even if removing default node pool
+  initial_node_count       = 1
+  remove_default_node_pool = true
+
+  network    = google_compute_network.vpc.name
+  subnetwork = google_compute_subnetwork.subnet.name
 
   ip_allocation_policy {
     cluster_secondary_range_name  = "pod-range"
@@ -67,7 +70,7 @@ resource "google_container_node_pool" "primary_nodes" {
   node_config {
     preemptible  = true
     machine_type = var.machine_type
-    disk_type    = "pd-standard"
+    disk_type    = "pd-standard"  # smaller disks
     disk_size_gb = 20
     oauth_scopes = [
       "https://www.googleapis.com/auth/cloud-platform"
