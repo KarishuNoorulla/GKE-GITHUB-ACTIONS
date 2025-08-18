@@ -1,4 +1,4 @@
-name: Terraform GCP Deployment
+name: GKE CI/CD Pipeline
 
 on:
   push:
@@ -6,15 +6,21 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  TF_VERSION: "1.5.0"
+  GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
+  GCP_REGION: ${{ secrets.GCP_REGION }}
+  GCP_SA_KEY: ${{ secrets.GCP_CREDENTIALS }}
+
 jobs:
+
+  # -----------------------------
+  # Stage 1: Terraform Infra
+  # -----------------------------
   terraform:
     runs-on: self-hosted
-
-    env:
-      TF_VERSION: "1.5.0"
-      GCP_PROJECT: ${{ secrets.GCP_PROJECT }}
-      GCP_REGION: ${{ secrets.GCP_REGION }}
-      GCP_SA_KEY: ${{ secrets.GCP_CREDENTIALS }}
+    outputs:
+      cluster_name: ${{ steps.get_cluster_name.outputs.cluster_name }}
 
     steps:
       - name: Checkout repository
@@ -25,21 +31,89 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Debug secrets (optional)
-        run: |
-          echo "GCP_PROJECT=${GCP_PROJECT}"
-          echo "GCP_REGION=${GCP_REGION}"
-          echo "GCP_SA_KEY length=${#GCP_SA_KEY}"
-
       - name: Configure GCP credentials
         run: |
           printf "%s" "${GCP_SA_KEY}" > $HOME/gcp-key.json
+          gcloud auth activate-service-account --key-file=$HOME/gcp-key.json
+          gcloud config set project $GCP_PROJECT
+          gcloud config set compute/region $GCP_REGION
+          gcloud config set compute/zone ${GCP_REGION}-a
 
       - name: Terraform Init
         run: terraform -chdir=terraform init
 
-      - name: Terraform Plan
-        run: terraform -chdir=terraform plan -var="project_id=${GCP_PROJECT}" -var="region=${GCP_REGION}" -var="credentials_file=$HOME/gcp-key.json"
-
       - name: Terraform Apply
         run: terraform -chdir=terraform apply -auto-approve -var="project_id=${GCP_PROJECT}" -var="region=${GCP_REGION}" -var="credentials_file=$HOME/gcp-key.json"
+
+      - name: Get Cluster Name
+        id: get_cluster_name
+        run: |
+          CLUSTER_NAME=$(terraform -chdir=terraform output -raw cluster_name)
+          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+
+  # -----------------------------
+  # Stage 2: Deploy Application
+  # -----------------------------
+  deploy-app:
+    runs-on: self-hosted
+    needs: terraform   # Depends on infra job
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Configure GCP credentials
+        run: |
+          printf "%s" "${GCP_SA_KEY}" > $HOME/gcp-key.json
+          gcloud auth activate-service-account --key-file=$HOME/gcp-key.json
+          gcloud config set project $GCP_PROJECT
+          gcloud config set compute/region $GCP_REGION
+          gcloud config set compute/zone ${GCP_REGION}-a
+
+      - name: Get GKE credentials
+        run: |
+          CLUSTER_NAME=${{ needs.terraform.outputs.cluster_name }}
+          gcloud container clusters get-credentials $CLUSTER_NAME --region $GCP_REGION
+
+      - name: Deploy Sample App
+        run: |
+          kubectl create namespace demo || true
+          kubectl apply -n demo -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hello-app
+  template:
+    metadata:
+      labels:
+        app: hello-app
+    spec:
+      containers:
+      - name: hello-app
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-service
+spec:
+  selector:
+    app: hello-app
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: LoadBalancer
+EOF
+
+      - name: Get Service External IP
+        run: |
+          echo "Waiting for external IP..."
+          kubectl wait --namespace demo --for=condition=available deployment/hello-app --timeout=120s
+          kubectl get svc -n demo hello-service
