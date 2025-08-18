@@ -18,8 +18,11 @@ jobs:
 
     - name: Configure GCP Credentials
       run: |
-        echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_key.json
-        export GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcp_key.json
+        mkdir -p $HOME/.gcp
+        cat > $HOME/.gcp/gcp_key.json <<'EOF'
+${{ secrets.GCP_CREDENTIALS }}
+EOF
+        export GOOGLE_APPLICATION_CREDENTIALS=$HOME/.gcp/gcp_key.json
 
     - name: Terraform Init
       working-directory: terraform
@@ -30,7 +33,7 @@ jobs:
       run: terraform apply -auto-approve \
         -var="project_id=${{ secrets.GCP_PROJECT }}" \
         -var="region=${{ secrets.GCP_REGION }}" \
-        -var="credentials_file=$HOME/gcp_key.json"
+        -var="credentials_file=$HOME/.gcp/gcp_key.json"
 
   deploy:
     needs: terraform
@@ -42,8 +45,11 @@ jobs:
 
     - name: Configure GCP Credentials
       run: |
-        echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_key.json
-        gcloud auth activate-service-account --key-file=$HOME/gcp_key.json
+        mkdir -p $HOME/.gcp
+        cat > $HOME/.gcp/gcp_key.json <<'EOF'
+${{ secrets.GCP_CREDENTIALS }}
+EOF
+        gcloud auth activate-service-account --key-file=$HOME/.gcp/gcp_key.json
         gcloud config set project ${{ secrets.GCP_PROJECT }}
         gcloud container clusters get-credentials github-gke-cluster --region ${{ secrets.GCP_REGION }}
 
