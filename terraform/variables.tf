@@ -1,18 +1,18 @@
 variable "project_id" {
-  description = "The GCP project ID"
+  description = "GCP project ID"
   type        = string
 }
 
 variable "region" {
-  description = "The GCP region"
+  description = "GCP region"
   type        = string
   default     = "us-central1"
 }
 
 variable "cluster_name" {
-  description = "The name of the GKE cluster"
+  description = "GKE cluster name"
   type        = string
-  default     = "github-gke-cluster"
+  default     = "example-gke-cluster"
 }
 
 variable "node_count" {
@@ -22,7 +22,7 @@ variable "node_count" {
 }
 
 variable "machine_type" {
-  description = "Machine type for nodes"
+  description = "GKE node machine type"
   type        = string
   default     = "e2-medium"
 }
