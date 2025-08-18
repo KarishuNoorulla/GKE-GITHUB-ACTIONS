@@ -56,7 +56,7 @@ jobs:
   # -----------------------------
   deploy-app:
     runs-on: self-hosted
-    needs: terraform   # Depends on infra job
+    needs: terraform
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -74,43 +74,11 @@ jobs:
           CLUSTER_NAME=${{ needs.terraform.outputs.cluster_name }}
           gcloud container clusters get-credentials $CLUSTER_NAME --region $GCP_REGION
 
+      - name: Create Namespace
+        run: kubectl create namespace demo || true
+
       - name: Deploy Sample App
-        run: |
-          kubectl create namespace demo || true
-          kubectl apply -n demo -f - <<EOF
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: hello-app
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: hello-app
-  template:
-    metadata:
-      labels:
-        app: hello-app
-    spec:
-      containers:
-      - name: hello-app
-        image: nginx:latest
-        ports:
-        - containerPort: 80
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: hello-service
-spec:
-  selector:
-    app: hello-app
-  ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 80
-  type: LoadBalancer
-EOF
+        run: kubectl apply -n demo -f k8s/deployment.yaml
 
       - name: Get Service External IP
         run: |
