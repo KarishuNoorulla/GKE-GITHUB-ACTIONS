@@ -1,0 +1,53 @@
+name: Terraform & GKE Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  terraform:
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+
+    - name: Configure GCP Credentials
+      run: |
+        echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_key.json
+        export GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcp_key.json
+
+    - name: Terraform Init
+      working-directory: terraform
+      run: terraform init
+
+    - name: Terraform Apply
+      working-directory: terraform
+      run: terraform apply -auto-approve \
+        -var="project_id=${{ secrets.GCP_PROJECT }}" \
+        -var="region=${{ secrets.GCP_REGION }}" \
+        -var="credentials_file=$HOME/gcp_key.json"
+
+  deploy:
+    needs: terraform
+    runs-on: self-hosted
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Configure GCP Credentials
+      run: |
+        echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_key.json
+        gcloud auth activate-service-account --key-file=$HOME/gcp_key.json
+        gcloud config set project ${{ secrets.GCP_PROJECT }}
+        gcloud container clusters get-credentials github-gke-cluster --region ${{ secrets.GCP_REGION }}
+
+    - name: Deploy App to GKE
+      run: |
+        kubectl apply -f app/deployment.yaml
+        kubectl apply -f app/service.yaml
