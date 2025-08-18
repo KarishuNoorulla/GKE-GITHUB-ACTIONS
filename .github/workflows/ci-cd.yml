@@ -1,12 +1,60 @@
-name: CI/CD
+name: Terraform GKE Deployment
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
-jobs:                           # <- This is required
-  terraform:                    # <- Your job name goes here
+env:
+  GCP_REGION: "us-central1"
+  GKE_CLUSTER_NAME: "github-gke-cluster"
+  TF_VERSION: "1.5.0"
+
+jobs:
+  setup_runner:
+    runs-on: self-hosted
+    steps:
+      - name: Check installed packages
+        run: |
+          echo "=== Installed Packages ==="
+          dpkg -l | grep -E 'git|curl|unzip|kubectl|jq|google-cloud-sdk'
+          echo "=== Python Version ==="
+          python3 --version || echo "Python not installed"
+          echo "=== gcloud Version ==="
+          gcloud --version || echo "gcloud not installed"
+          echo "=== kubectl Version ==="
+          kubectl version --client || echo "kubectl not installed"
+
+      - name: Install basic dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            git \
+            curl \
+            unzip \
+            jq \
+            apt-transport-https \
+            ca-certificates \
+            gnupg
+
+      - name: Install Google Cloud SDK
+        run: |
+          echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | sudo tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
+          curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
+          sudo apt-get update -y
+          sudo apt-get install -y google-cloud-sdk google-cloud-sdk-gke-gcloud-auth-plugin kubectl
+          gcloud --version
+          kubectl version --client
+
+      - name: Verify installations
+        run: |
+          which gcloud
+          which kubectl
+          gcloud --version
+          kubectl version --client
+
+  terraform:
     needs: setup_runner
     runs-on: self-hosted
     environment: production
@@ -33,17 +81,6 @@ jobs:                           # <- This is required
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
-      - name: Verify or Create GCS Bucket
-        run: |
-          export BUCKET_NAME="tf-state-bucket-${{ secrets.GCP_PROJECT }}"
-          if ! gsutil ls gs://$BUCKET_NAME >/dev/null 2>&1; then
-            echo "Creating GCS bucket for Terraform state..."
-            gsutil mb -p ${{ secrets.GCP_PROJECT }} -l ${{ env.GCP_REGION }} gs://$BUCKET_NAME
-            gsutil versioning set on gs://$BUCKET_NAME
-          else
-            echo "Bucket already exists"
-          fi
-
       - name: Terraform Init
         run: terraform init -input=false
 
@@ -55,3 +92,40 @@ jobs:                           # <- This is required
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve tfplan
+
+  deploy:
+    needs: terraform
+    runs-on: self-hosted
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure GCP Credentials
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+          workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+
+      - name: Configure kubectl
+        run: |
+          gcloud components update
+          gcloud container clusters get-credentials ${{ env.GKE_CLUSTER_NAME }} \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ secrets.GCP_PROJECT }}
+
+      - name: Deploy Application
+        run: |
+          kubectl apply -f app/deployment.yaml
+          kubectl apply -f app/service.yaml
+          kubectl rollout status deployment/hello-deployment --timeout=90s
+
+      - name: Get Service URL
+        run: |
+          echo "Service IP: $(kubectl get service hello-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+          echo "Access the application at: http://$(kubectl get service hello-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')"
