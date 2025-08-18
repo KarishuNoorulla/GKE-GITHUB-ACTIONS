@@ -36,7 +36,7 @@ resource "google_container_cluster" "primary" {
   location = var.region
 
   # Must be >=1 even if removing default node pool
-  initial_node_count       = 1
+  initial_node_count       = 0
   remove_default_node_pool = true
 
   network    = google_compute_network.vpc.name
