@@ -1,10 +1,10 @@
 resource "google_compute_network" "vpc_network" {
-  name                    = "tf-vpc-network"
+  name                    = "tf-vpc-network-1"
   auto_create_subnetworks = true
 }
 
 resource "google_container_cluster" "primary" {
-  name     = "tf-gke-cluster"
+  name     = "tf-gke-cluster-1"
   location = var.region
 
   network    = google_compute_network.vpc_network.name

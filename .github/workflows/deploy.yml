@@ -48,8 +48,11 @@ jobs:
       - name: Get Cluster Name
         id: get_cluster_name
         run: |
-          CLUSTER_NAME=$(terraform -chdir=terraform output -raw cluster_name)
-          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+          echo "Fetching cluster name..."
+          terraform -chdir=terraform output -raw cluster_name > cluster_name.txt
+          CLUSTER_NAME=$(cat cluster_name.txt)
+          echo "cluster_name=${CLUSTER_NAME}" >> $GITHUB_OUTPUT
+
 
   # -----------------------------
   # Stage 2: Deploy Application
