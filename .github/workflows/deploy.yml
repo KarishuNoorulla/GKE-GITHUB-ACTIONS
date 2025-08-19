@@ -14,9 +14,6 @@ env:
 
 jobs:
 
-  # -----------------------------
-  # Stage 1: Terraform Infra
-  # -----------------------------
   terraform:
     runs-on: self-hosted
     outputs:
@@ -54,9 +51,7 @@ jobs:
           echo "cluster_name=${CLUSTER_NAME}" >> $GITHUB_OUTPUT
 
 
-  # -----------------------------
-  # Stage 2: Deploy Application
-  # -----------------------------
+  
   deploy-app:
     runs-on: self-hosted
     needs: terraform
